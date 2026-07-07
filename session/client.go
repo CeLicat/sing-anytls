@@ -34,12 +34,14 @@ type Client struct {
 
 	idleSessionTimeout time.Duration
 	minIdleSession     int
+	disableReuse       bool
 
 	logger logger.Logger
 }
 
 func NewClient(ctx context.Context, logger logger.Logger, dialOut util.DialOutFunc,
 	_padding *atomic.TypedValue[*padding.PaddingFactory], idleSessionCheckInterval, idleSessionTimeout time.Duration, minIdleSession int,
+	disableReuse bool,
 ) *Client {
 	c := &Client{
 		sessions:           make(map[uint64]*Session),
@@ -47,6 +49,7 @@ func NewClient(ctx context.Context, logger logger.Logger, dialOut util.DialOutFu
 		padding:            _padding,
 		idleSessionTimeout: idleSessionTimeout,
 		minIdleSession:     minIdleSession,
+		disableReuse:       disableReuse,
 		logger:             logger,
 	}
 	if idleSessionCheckInterval <= time.Second*5 {
@@ -57,17 +60,19 @@ func NewClient(ctx context.Context, logger logger.Logger, dialOut util.DialOutFu
 	}
 	c.die, c.dieCancel = context.WithCancel(ctx)
 	c.idleSession = skiplist.NewSkipList[uint64, *Session]()
-	go func() {
-		for {
-			time.Sleep(idleSessionCheckInterval)
-			c.idleCleanup()
-			select {
-			case <-c.die.Done():
-				return
-			default:
+	if !c.disableReuse {
+		go func() {
+			for {
+				time.Sleep(idleSessionCheckInterval)
+				c.idleCleanup()
+				select {
+				case <-c.die.Done():
+					return
+				default:
+				}
 			}
-		}
-	}()
+		}()
+	}
 	return c
 }
 
@@ -82,7 +87,9 @@ func (c *Client) CreateStream(ctx context.Context) (net.Conn, error) {
 	var stream *Stream
 	var err error
 
-	session = c.getIdleSession()
+	if !c.disableReuse {
+		session = c.getIdleSession()
+	}
 	if session == nil {
 		session, err = c.createSession(ctx)
 	}
@@ -98,10 +105,15 @@ func (c *Client) CreateStream(ctx context.Context) (net.Conn, error) {
 	stream.dieHook = func() {
 		// If Session is not closed, put this Stream to pool
 		if !session.IsClosed() {
+			if c.disableReuse {
+				session.Close()
+				return
+			}
+
 			select {
 			case <-c.die.Done():
 				// Now client has been closed
-				go session.Close()
+				session.Close()
 			default:
 				c.idleSessionLock.Lock()
 				session.idleSince = time.Now()
@@ -134,9 +146,11 @@ func (c *Client) createSession(ctx context.Context) (*Session, error) {
 	session := NewClientSession(underlying, c.padding, c.logger)
 	session.seq = c.sessionCounter.Add(1)
 	session.dieHook = func() {
-		c.idleSessionLock.Lock()
-		c.idleSession.Remove(math.MaxUint64 - session.seq)
-		c.idleSessionLock.Unlock()
+		if !c.disableReuse {
+			c.idleSessionLock.Lock()
+			c.idleSession.Remove(math.MaxUint64 - session.seq)
+			c.idleSessionLock.Unlock()
+		}
 
 		c.sessionsLock.Lock()
 		delete(c.sessions, session.seq)
