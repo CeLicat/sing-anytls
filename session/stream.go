@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anytls/sing-anytls/pipe"
+	"github.com/anytls/sing-anytls/internal/pipe"
 )
 
 // Stream implements net.Conn

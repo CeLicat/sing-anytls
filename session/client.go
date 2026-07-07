@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anytls/sing-anytls/internal/skiplist"
 	"github.com/anytls/sing-anytls/padding"
-	"github.com/anytls/sing-anytls/skiplist"
 	"github.com/anytls/sing-anytls/util"
 	"github.com/sagernet/sing/common/atomic"
 	"github.com/sagernet/sing/common/logger"
