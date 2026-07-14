@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anytls/sing-anytls/padding"
+	"github.com/celicat/sing-anytls/padding"
 	"github.com/sagernet/sing/common/atomic"
 	"github.com/sagernet/sing/common/logger"
 )
