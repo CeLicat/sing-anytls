@@ -1,3 +1,3 @@
 package util
 
-var Verison = "sing-anytls/0.0.12"
+var Verison = "celicat-anytls/0.0.12"
