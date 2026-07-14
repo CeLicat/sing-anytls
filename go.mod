@@ -1,4 +1,4 @@
-module github.com/anytls/sing-anytls
+module github.com/celicat/sing-anytls
 
 go 1.23.1
 
